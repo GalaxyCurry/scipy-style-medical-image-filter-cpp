@@ -30,14 +30,6 @@ target_link_libraries(filterFuns
     ${DCMTK_LIBRARIES}  
 )
 
-target_link_libraries(filterFuns
-    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libdcmimgle.a"
-    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libdcmdata.a"
-    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/liboflog.a"
-    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libofstd.a"
-    stdc++fs 
-)
-
 if(MINGW)
     target_link_libraries(filterFuns stdc++fs)
 endif()

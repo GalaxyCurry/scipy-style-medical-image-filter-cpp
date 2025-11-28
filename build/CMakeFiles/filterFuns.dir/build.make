@@ -112,10 +112,6 @@ filterFuns_EXTERNAL_OBJECTS =
 filterFuns.exe: CMakeFiles/filterFuns.dir/src/main.cpp.obj
 filterFuns.exe: CMakeFiles/filterFuns.dir/src/filterfuns.cpp.obj
 filterFuns.exe: CMakeFiles/filterFuns.dir/build.make
-filterFuns.exe: D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libdcmimgle.a
-filterFuns.exe: D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libdcmdata.a
-filterFuns.exe: D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/liboflog.a
-filterFuns.exe: D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libofstd.a
 filterFuns.exe: CMakeFiles/filterFuns.dir/linkLibs.rsp
 filterFuns.exe: CMakeFiles/filterFuns.dir/objects1.rsp
 filterFuns.exe: CMakeFiles/filterFuns.dir/link.txt

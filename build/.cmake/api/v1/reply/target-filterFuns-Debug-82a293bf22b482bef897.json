@@ -41,7 +41,7 @@
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 33,
+				"line" : 34,
 				"parent" : 0
 			},
 			{
@@ -240,31 +240,6 @@
 			{
 				"backtrace" : 2,
 				"fragment" : "-ldcmect",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 3,
-				"fragment" : "D:\\tasks\\cuda_learn\\filterlib\\dcmtk-install\\lib\\libdcmimgle.a",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 3,
-				"fragment" : "D:\\tasks\\cuda_learn\\filterlib\\dcmtk-install\\lib\\libdcmdata.a",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 3,
-				"fragment" : "D:\\tasks\\cuda_learn\\filterlib\\dcmtk-install\\lib\\liboflog.a",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 3,
-				"fragment" : "D:\\tasks\\cuda_learn\\filterlib\\dcmtk-install\\lib\\libofstd.a",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 3,
-				"fragment" : "-lstdc++fs",
 				"role" : "libraries"
 			},
 			{
