@@ -12,7 +12,7 @@ else()
 endif()
 
 
-set(DCMTK_ROOT "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/lib/dcmtk-install/")
+set(DCMTK_ROOT "D:/tasks/cuda_learn/filterlib/dcmtk-install/")
 find_package(DCMTK REQUIRED)  
 
 
@@ -31,10 +31,10 @@ target_link_libraries(filterFuns
 )
 
 target_link_libraries(filterFuns
-    "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/lib/dcmtk-install/lib/libdcmimgle.a"
-    "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/lib/libdcmdata.a"
-    "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/lib/liboflog.a"
-    "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/lib/libofstd.a"
+    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libdcmimgle.a"
+    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libdcmdata.a"
+    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/liboflog.a"
+    "D:/tasks/cuda_learn/filterlib/dcmtk-install/lib/libofstd.a"
     stdc++fs 
 )
 
