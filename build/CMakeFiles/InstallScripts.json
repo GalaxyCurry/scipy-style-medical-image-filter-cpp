@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

@@ -1,3 +1,0 @@
-D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/build/CMakeFiles/filterFuns.dir
-D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/build/CMakeFiles/edit_cache.dir
-D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/build/CMakeFiles/rebuild_cache.dir
