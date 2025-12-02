@@ -8,154 +8,140 @@
 #include <cmath>
 #include <cstddef>
 
-#include "ImageFilter.h"
+#include "ImageFilter.h"  // 你的滤波类头文件
 
-#include <dcmtk/dcmdata/dcfilefo.h>    // DcmFileFormat
-#include <dcmtk/dcmdata/dcdatset.h>   // DcmDataset
-#include <dcmtk/dcmdata/dcdeftag.h>    // 预定义DICOM标签
-#include <dcmtk/ofstd/ofcond.h>      // OFCondition
-#include <dcmtk/dcmdata/dctypes.h>     // 数据类型（Uint16等）
-#include <dcmtk/dcmdata/dcxfer.h>      // 传输语法
-#include <dcmtk/dcmdata/dcpixseq.h>    // 像素序列
-#include <dcmtk/dcmimgle/dcmimage.h>   // DicomImage
-#include <dcmtk/dcmdata/dcostrmz.h>    // 压缩保存
-#include <dcmtk/ofstd/ofstring.h>      // OFString
+// ITK库包含（严格适配ITK 5.4）
+#include "itkImage.h"
+#include "itkGDCMImageIO.h"
+#include "itkGDCMSeriesFileNames.h"
+#include "itkImageSeriesReader.h"
+#include "itkImageSeriesWriter.h"
+#include "itkRescaleIntensityImageFilter.h"
+#include "itkMetaDataDictionary.h"
+#include "itkMetaDataObject.h"
 
+// 定义ITK图像类型（保持不变）
+using PixelType = uint16_t;
+constexpr unsigned int Dimension = 3;
+using ImageType = itk::Image<PixelType, Dimension>;
+using ReaderType = itk::ImageSeriesReader<ImageType>;
+using ImageIOType = itk::GDCMImageIO;
+using SeriesFileNamesType = itk::GDCMSeriesFileNames;
+using WriterType = itk::ImageSeriesWriter<ImageType, ImageType>;
 
+// 定义矩阵类型（保持不变）
+using Mat2D = std::vector<std::vector<double>>;
+using Mat3D = std::vector<Mat2D>;
 
-// -------------------------- 工具函数 --------------------------
-// 1. 遍历文件夹，获取所有.dcm文件路径
+// -------------------------- 工具函数（完全适配ITK 5.4） --------------------------
+// 1. 获取DICOM序列文件路径（ITK 5.4正确用法）
 std::vector<std::string> get_all_dcm_files(const std::string& folder_path) {
-    std::vector<std::string> dcm_paths;
     namespace fs = std::filesystem;
-
     if (!fs::exists(folder_path) || !fs::is_directory(folder_path)) {
         throw std::runtime_error("文件夹不存在或不是目录：" + folder_path);
     }
 
-    for (const auto& entry : fs::directory_iterator(folder_path)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".dcm") {
-            dcm_paths.push_back(entry.path().string());
-        }
+    auto seriesFileNames = SeriesFileNamesType::New();
+    seriesFileNames->SetDirectory(folder_path);  // 必须先设置目录
+    
+    // ITK 5.4：GetSeriesUIDs() 获取所有序列UID
+    std::vector<std::string> seriesUIDs = seriesFileNames->GetSeriesUIDs();
+    if (seriesUIDs.empty()) {
+        throw std::runtime_error("文件夹中未找到DCM序列：" + folder_path);
     }
 
+    // ITK 5.4：GetFileNames() 必须传入序列UID作为参数（无SetSeriesUID方法）
+    const std::string targetSeriesUID = seriesUIDs[0];
+    std::vector<std::string> dcm_paths = seriesFileNames->GetFileNames(targetSeriesUID);
+    
     if (dcm_paths.empty()) {
-        throw std::runtime_error("文件夹中未找到DCM文件：" + folder_path);
+        throw std::runtime_error("获取DCM文件路径失败（UID：" + targetSeriesUID + "）");
     }
 
     return dcm_paths;
 }
 
-// 2. 读取单个DCM文件的像素数据和z轴位置（用于排序）
-struct DcmSlice {
-    Mat2D pixel_data;  // 2D切片数据（double类型）
-    double z_pos;      // z轴位置（用于按深度排序）
-    int height;        // 切片高度
-    int width;         // 切片宽度
-    DcmFileFormat file_format; // 保存原始文件格式（用于复制元数据）
-};
+// 2. 读取DICOM序列并转换为Mat3D（ITK 5.4正确用法）
+void read_dcm_series(const std::string& folder_path, Mat3D& volume, 
+                    std::vector<double>& spacing, 
+                    // 元数据类型：适配ITK 5.4的返回值（const std::vector<MetaDataDictionary*>*）
+                    std::vector<itk::MetaDataDictionary*>& metaDictionaries) {
+    // 创建读取器和IO对象
+    auto reader = ReaderType::New();
+    auto dicomIO = ImageIOType::New();
+    reader->SetImageIO(dicomIO);
 
-DcmSlice read_dcm_slice(const std::string& dcm_path) {
-    DcmSlice slice;
-
-    // 读取DCM文件
-    OFCondition status = slice.file_format.loadFile(dcm_path.c_str());
-    if (!status.good()) {
-        throw std::runtime_error("读取DCM文件失败：" + dcm_path + "，错误：" + status.text());
+    // 获取序列文件名称（ITK 5.4正确用法）
+    auto seriesFileNames = SeriesFileNamesType::New();
+    seriesFileNames->SetDirectory(folder_path);
+    
+    std::vector<std::string> seriesUIDs = seriesFileNames->GetSeriesUIDs();
+    if (seriesUIDs.empty()) {
+        throw std::runtime_error("未找到DICOM序列：" + folder_path);
     }
 
-    // 关键修复1：const DcmFileFormat转换为非const，调用getDataset()
-    DcmDataset* dataset = const_cast<DcmFileFormat*>(&slice.file_format)->getDataset();
-    if (!dataset) {
-        throw std::runtime_error("获取DCM数据集失败：" + dcm_path);
+    // 直接传入UID获取文件列表（无SetSeriesUID）
+    std::vector<std::string> fileNames = seriesFileNames->GetFileNames(seriesUIDs[0]);
+    reader->SetFileNames(fileNames);
+
+    try {
+        reader->Update();
+    } catch (const itk::ExceptionObject& e) {
+        throw std::runtime_error("读取DICOM序列失败：" + std::string(e.GetDescription()));
     }
 
-    // 获取图像尺寸（Rows/Columns）- 非const数据集调用接口
-    Uint16 rows = 0, cols = 0;
-    // 去掉多余参数，使用默认值，避免匹配错误重载
-    if (!dataset->findAndGetUint16(DCM_Rows, rows).good() ||
-        !dataset->findAndGetUint16(DCM_Columns, cols).good()) {
-        throw std::runtime_error("获取DCM图像尺寸失败：" + dcm_path);
-    }
-    slice.height = static_cast<int>(rows);
-    slice.width = static_cast<int>(cols);
+    // 获取图像信息（保持不变）
+    ImageType::Pointer image = reader->GetOutput();
+    ImageType::RegionType region = image->GetLargestPossibleRegion();
+    ImageType::SizeType size = region.GetSize();
+    
+    // 获取间距信息（保持不变）
+    ImageType::SpacingType itkSpacing = image->GetSpacing();
+    spacing = {itkSpacing[0], itkSpacing[1], itkSpacing[2]};
 
-    // 获取z轴位置（SliceLocation）- 非const调用
-    if (!dataset->findAndGetFloat64(DCM_SliceLocation, slice.z_pos).good()) {
-        // 兼容无SliceLocation的情况，读取ImagePositionPatient的z分量
-        const Float64* pos_ptr = nullptr; // 非const指针（适配接口）
-        unsigned long pos_count = 0;
-        if (dataset->findAndGetFloat64Array(DCM_ImagePositionPatient, pos_ptr, &pos_count).good() && pos_count >= 3) {
-            slice.z_pos = pos_ptr[2];
-            std::cout << "警告：DCM文件" << dcm_path << "无SliceLocation，使用ImagePositionPatient的z分量：" << slice.z_pos << std::endl;
-        } else {
-            throw std::runtime_error("获取DCM切片位置失败：" + dcm_path + "（无SliceLocation和ImagePositionPatient标签）");
+    // ITK 5.4：处理元数据字典（返回值为 const std::vector<MetaDataDictionary*>*）
+    auto metaDictArray = reader->GetMetaDataDictionaryArray();
+    if (!metaDictArray || metaDictArray->empty()) {
+        throw std::runtime_error("获取DICOM元数据失败");
+    }
+    // 复制到非const向量（适配写入器接口）
+    metaDictionaries.clear();
+    for (auto dictPtr : *metaDictArray) {
+        metaDictionaries.push_back(const_cast<itk::MetaDataDictionary*>(dictPtr));
+    }
+
+    // 转换为Mat3D格式（保持不变）
+    volume.resize(size[2]);
+    ImageType::IndexType index;
+
+    for (size_t z = 0; z < size[2]; ++z) {
+        volume[z].resize(size[1], std::vector<double>(size[0]));
+        index[2] = z;
+        
+        for (size_t y = 0; y < size[1]; ++y) {
+            index[1] = y;
+            for (size_t x = 0; x < size[0]; ++x) {
+                index[0] = x;
+                volume[z][y][x] = static_cast<double>(image->GetPixel(index));
+            }
         }
     }
 
-    // 读取像素数据：直接使用非const dataset构造DicomImage
-    DicomImage dcm_image(dataset, dataset->getOriginalXfer());
-    if (dcm_image.getStatus() != EIS_Normal) {
-        throw std::runtime_error("解析DCM像素数据失败：" + dcm_path + "，错误状态：" + std::to_string(dcm_image.getStatus()));
-    }
-
-    // 获取像素数据指针（16位无符号整数）
-    const void* pixel_ptr = dcm_image.getOutputData(16);
-    if (!pixel_ptr) {
-        throw std::runtime_error("获取DCM像素指针失败：" + dcm_path);
-    }
-    const uint16_t* pixel_data_16 = static_cast<const uint16_t*>(pixel_ptr);
-
-    // 填充到Mat2D（double类型）
-    const size_t height = static_cast<size_t>(slice.height);
-    const size_t width = static_cast<size_t>(slice.width);
-    slice.pixel_data.resize(height, std::vector<double>(width));
-    for (size_t i = 0; i < height; ++i) {
-        for (size_t j = 0; j < width; ++j) {
-            slice.pixel_data[i][j] = static_cast<double>(pixel_data_16[i * width + j]);
-        }
-    }
-
-    return slice;
+    std::cout << "3D体数据尺寸：z=" << size[2] << " × y=" << size[1] << " × x=" << size[0] << std::endl;
 }
 
-// 3. 将DcmSlice数组转换为Mat3D（[depth, height, width]）
-Mat3D slices_to_mat3d(const std::vector<DcmSlice>& slices) {
-    if (slices.empty()) {
-        throw std::runtime_error("切片数组为空，无法转换为3D数组");
-    }
-
-    const size_t depth = slices.size();
-    const size_t height = static_cast<size_t>(slices[0].height);
-    const size_t width = static_cast<size_t>(slices[0].width);
-
-    Mat3D mat3d(depth, Mat2D(height, std::vector<double>(width)));
-
-    for (size_t z = 0; z < depth; ++z) {
-        if (static_cast<size_t>(slices[z].height) != height || static_cast<size_t>(slices[z].width) != width) {
-            throw std::runtime_error("第" + std::to_string(z) + "个切片尺寸不一致（预期：" + 
-                                   std::to_string(height) + "x" + std::to_string(width) + 
-                                   "，实际：" + std::to_string(slices[z].height) + "x" + std::to_string(slices[z].width) + "）");
-        }
-        for (size_t y = 0; y < height; ++y) {
-            std::copy(slices[z].pixel_data[y].begin(), slices[z].pixel_data[y].end(), mat3d[z][y].begin());
-        }
-    }
-
-    return mat3d;
-}
-
-// 4. 将Mat3D保存为一系列DCM文件（保留原始DICOM元数据）
+// 3. 保存Mat3D为DICOM序列（ITK 5.4正确用法）
 void save_mat3d_to_dcm(const Mat3D& mat3d, const std::string& output_folder,
-                      const std::vector<DcmSlice>& original_slices,
+                      // 元数据类型：ITK 5.4写入器需要 std::vector<MetaDataDictionary*>*
+                      const std::vector<itk::MetaDataDictionary*>& originalMetaDictionaries,
                       const std::vector<double>& spacing) {
     if (mat3d.empty() || mat3d[0].empty() || mat3d[0][0].empty()) {
         throw std::runtime_error("3D数组为空，无法保存DCM文件");
     }
 
-    if (mat3d.size() != original_slices.size()) {
+    if (mat3d.size() != originalMetaDictionaries.size()) {
         throw std::runtime_error("处理后的数据与原始切片数量不匹配（处理后：" + 
-                               std::to_string(mat3d.size()) + "，原始：" + std::to_string(original_slices.size()) + "）");
+                               std::to_string(mat3d.size()) + "，原始：" + std::to_string(originalMetaDictionaries.size()) + "）");
     }
 
     namespace fs = std::filesystem;
@@ -165,116 +151,84 @@ void save_mat3d_to_dcm(const Mat3D& mat3d, const std::string& output_folder,
         }
     }
 
+    // 创建图像并填充数据（保持不变）
     const size_t depth = mat3d.size();
     const size_t height = mat3d[0].size();
     const size_t width = mat3d[0][0].size();
+
+    ImageType::Pointer image = ImageType::New();
+    ImageType::RegionType region;
+    ImageType::IndexType start;
+    ImageType::SizeType size;
+
+    start[0] = 0;
+    start[1] = 0;
+    start[2] = 0;
+
+    size[0] = width;
+    size[1] = height;
+    size[2] = depth;
+
+    region.SetSize(size);
+    region.SetIndex(start);
+    image->SetRegions(region);
+
+    // 设置间距（保持不变）
+    ImageType::SpacingType itkSpacing;
+    itkSpacing[0] = spacing[0];
+    itkSpacing[1] = spacing[1];
+    itkSpacing[2] = spacing[2];
+    image->SetSpacing(itkSpacing);
+
+    // 分配内存并填充数据（保持不变）
+    image->Allocate();
+    ImageType::IndexType index;
 
     for (size_t z = 0; z < depth; ++z) {
         if (mat3d[z].size() != height || mat3d[z][0].size() != width) {
             throw std::runtime_error("第" + std::to_string(z) + "个处理后切片尺寸异常");
         }
 
-        // 复制原始元数据（深拷贝）
-        DcmFileFormat file_format;
-        OFCondition status = file_format.copyFrom(original_slices[z].file_format);
-        if (!status.good()) {
-            throw std::runtime_error("复制DCM元数据失败（切片" + std::to_string(z) + "）：" + status.text());
-        }
-        DcmDataset* dataset = file_format.getDataset(); // 保存时用非const（需修改）
-        if (!dataset) {
-            throw std::runtime_error("获取输出DCM数据集失败（切片" + std::to_string(z) + "）");
-        }
-
-        // 准备像素数据（16位无符号整数）
-        std::vector<uint16_t> pixel_data_16(height * width);
+        index[2] = z;
         for (size_t y = 0; y < height; ++y) {
+            index[1] = y;
             for (size_t x = 0; x < width; ++x) {
+                index[0] = x;
                 double val = std::clamp(mat3d[z][y][x], 0.0, 65535.0);
-                pixel_data_16[y * width + x] = static_cast<uint16_t>(std::round(val));
+                image->SetPixel(index, static_cast<PixelType>(std::round(val)));
             }
         }
+    }
 
-        // 更新像素数据
-        status = dataset->putAndInsertUint16Array(DCM_PixelData, pixel_data_16.data(), static_cast<unsigned long>(pixel_data_16.size()));
-        if (!status.good()) {
-            throw std::runtime_error("更新DCM像素数据失败（切片" + std::to_string(z) + "）：" + status.text());
-        }
+    // 设置写入器（保持不变）
+    auto writer = WriterType::New();
+    auto dicomIO = ImageIOType::New();
+    writer->SetImageIO(dicomIO);
+    writer->SetInput(image);
 
-        // 更新像素间距
-        if (spacing.size() >= 2) {
-            dataset->putAndInsertFloat64(DCM_PixelSpacing, spacing[0], 0);
-            dataset->putAndInsertFloat64(DCM_PixelSpacing, spacing[1], 1);
-        }
-        if (spacing.size() >= 3) {
-            dataset->putAndInsertFloat64(DCM_SliceThickness, spacing[2]);
-        }
+    // 生成输出文件名（保持不变）
+    std::vector<std::string> outputFileNames;
+    for (size_t i = 0; i < depth; ++i) {
+        std::string fileName = output_folder + "/filtered_slice_" + std::to_string(i + 1) + ".dcm";
+        outputFileNames.push_back(fileName);
+    }
+    writer->SetFileNames(outputFileNames);
 
-        // 更新切片位置
-        dataset->putAndInsertFloat64(DCM_SliceLocation, original_slices[z].z_pos);
+    // ITK 5.4：SetMetaDataDictionaryArray 需要传入 std::vector<MetaDataDictionary*>*
+    writer->SetMetaDataDictionaryArray(&originalMetaDictionaries);
 
-        // 关键修复2：const DcmFileFormat转换为非const，获取传输语法
-        DcmDataset* original_dataset = const_cast<DcmFileFormat*>(&original_slices[z].file_format)->getDataset();
-        E_TransferSyntax xfer = original_dataset->getOriginalXfer();
-        
-        // 保存文件
-        std::string output_path = output_folder + "/filtered_slice_" + std::to_string(z + 1) + ".dcm";
-        status = file_format.saveFile(output_path.c_str(), xfer);
-        if (!status.good()) {
-            throw std::runtime_error("保存DCM文件失败：" + output_path + "，错误：" + status.text());
-        }
-
-        if ((z + 1) % 50 == 0) {
-            std::cout << "已保存 " << (z + 1) << "/" << depth << " 个DCM文件" << std::endl;
-        }
+    // 写入DICOM文件（保持不变）
+    try {
+        writer->Update();
+    } catch (const itk::ExceptionObject& e) {
+        throw std::runtime_error("保存DICOM文件失败：" + std::string(e.GetDescription()));
     }
 
     std::cout << "所有DCM文件保存完成！共 " << depth << " 个文件，输出路径：" << output_folder << std::endl;
 }
 
-// 5. 从DCM获取像素间距（x/y/z轴）
-std::vector<double> get_dcm_spacing(const std::vector<DcmSlice>& slices) {
-    std::vector<double> spacing = {1.0, 1.0, 1.0};
-    if (slices.empty()) {
-        return spacing;
-    }
-
-    // 关键修复3：const DcmFileFormat转换为非const，获取数据集
-    DcmDataset* dataset = const_cast<DcmFileFormat*>(&slices[0].file_format)->getDataset();
-    if (dataset) {
-        double spacing_x = 1.0, spacing_y = 1.0;
-        // 非const调用findAndGetFloat64
-        if (dataset->findAndGetFloat64(DCM_PixelSpacing, spacing_x, 0).good() &&
-            dataset->findAndGetFloat64(DCM_PixelSpacing, spacing_y, 1).good()) {
-            spacing[0] = spacing_x;
-            spacing[1] = spacing_y;
-        } else {
-            std::cout << "警告：无法获取像素间距，使用默认值（1.0, 1.0）" << std::endl;
-        }
-
-        // 读取切片厚度
-        double slice_thickness = 1.0;
-        if (dataset->findAndGetFloat64(DCM_SliceThickness, slice_thickness).good()) {
-            spacing[2] = slice_thickness;
-        }
-    }
-
-    // 计算z轴间距（如果未获取到切片厚度）
-    if (slices.size() >= 2 && spacing[2] <= 0.01) {
-        double z_diff = std::fabs(slices[1].z_pos - slices[0].z_pos);
-        if (z_diff > 0.01) {
-            spacing[2] = z_diff;
-        }
-    }
-
-    return spacing;
-}
-
-
-
-
-// -------------------------- 主函数 --------------------------
+// -------------------------- 主函数（适配ITK 5.4） --------------------------
 int main(int argc, char* argv[]) {
-    // 标记未使用参数，避免警告
     (void)argc;
     (void)argv;
 
@@ -287,40 +241,26 @@ int main(int argc, char* argv[]) {
         const bool use_gaussian_filter = true;
         const bool use_sobel_filter = false;
 
-        // 读取DCM文件路径
+        // 读取DCM文件路径（保持不变）
         std::cout << "===== 开始读取DCM文件 =====" << std::endl;
         std::vector<std::string> dcm_paths = get_all_dcm_files(dcm_folder);
         std::cout << "成功找到 " << dcm_paths.size() << " 个DCM文件" << std::endl;
 
-        // 解析DCM切片
-        std::cout << "\n===== 开始解析DCM切片 =====" << std::endl;
-        std::vector<DcmSlice> slices;
-        slices.reserve(dcm_paths.size());
-        for (size_t i = 0; i < dcm_paths.size(); ++i) {
-            std::cout << "解析第 " << (i + 1) << "/" << dcm_paths.size() << " 个文件：" << dcm_paths[i] << std::endl;
-            slices.push_back(read_dcm_slice(dcm_paths[i]));
-        }
-
-        // 按z轴排序
-        std::cout << "\n===== 按切片位置排序 =====" << std::endl;
-        std::sort(slices.begin(), slices.end(), [](const DcmSlice& a, const DcmSlice& b) {
-            return a.z_pos < b.z_pos;
-        });
-        std::cout << "排序完成，共 " << slices.size() << " 个切片" << std::endl;
-
-        // 构建3D体数据
-        std::cout << "\n===== 构建3D体数据 =====" << std::endl;
-        Mat3D input_vol = slices_to_mat3d(slices);
+        // 解析DCM序列并构建3D体数据（元数据类型改为非const指针向量）
+        std::cout << "\n===== 开始解析DCM序列 =====" << std::endl;
+        Mat3D input_vol;
+        std::vector<double> spacing;
+        std::vector<itk::MetaDataDictionary*> metaDictionaries;  // ITK 5.4适配类型
+        
+        read_dcm_series(dcm_folder, input_vol, spacing, metaDictionaries);
+        
         const size_t depth = input_vol.size();
         const size_t height = input_vol[0].size();
         const size_t width = input_vol[0][0].size();
         std::cout << "3D体数据尺寸：z=" << depth << " × y=" << height << " × x=" << width << std::endl;
-
-        // 获取像素间距
-        std::vector<double> spacing = get_dcm_spacing(slices);
         std::cout << "像素间距：x=" << spacing[0] << "mm, y=" << spacing[1] << "mm, z=" << spacing[2] << "mm" << std::endl;
 
-        // 滤波处理
+        // 滤波处理（保持不变）
         std::cout << "\n===== 开始滤波处理 =====" << std::endl;
         Mat3D filtered_vol;
         if (use_gaussian_filter) {
@@ -335,9 +275,9 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "滤波处理完成" << std::endl;
 
-        // 保存DCM文件
+        // 保存DCM文件（保持不变）
         std::cout << "\n===== 开始保存DCM文件 =====" << std::endl;
-        save_mat3d_to_dcm(filtered_vol, output_folder, slices, spacing);
+        save_mat3d_to_dcm(filtered_vol, output_folder, metaDictionaries, spacing);
 
         std::cout << "\n===== 所有流程执行完成！=====" << std::endl;
 

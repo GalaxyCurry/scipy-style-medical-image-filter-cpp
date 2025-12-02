@@ -12,12 +12,12 @@ else()
 endif()
 
 
-set(DCMTK_ROOT "D:/tasks/cuda_learn/filterlib/dcmtk-install/")
-find_package(DCMTK REQUIRED)  
+set(DCMTK_ROOT "E:/vscode/itk/itk-prefix/")
+find_package(ITK REQUIRED)  
 
 
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include  
+    ${CMAKE_CURRENT_SOURCE_DIR}/include 
     ${DCMTK_INCLUDE_DIRS}              
 )
 
@@ -27,7 +27,7 @@ add_executable(filterFuns ${SOURCE_FILES})
 
 
 target_link_libraries(filterFuns
-    ${DCMTK_LIBRARIES}  
+    ${ITK_LIBRARIES}  
 )
 
 if(MINGW)
@@ -38,6 +38,6 @@ endif()
 
 set_target_properties(filterFuns PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH "${DCMTK_LIBRARY_DIRS}"
-    BUILD_RPATH "${DCMTK_LIBRARY_DIRS}"
+    INSTALL_RPATH "${ITK_LIBRARY_DIRS}"
+    BUILD_RPATH "${ITK_LIBRARY_DIRS}"
 )

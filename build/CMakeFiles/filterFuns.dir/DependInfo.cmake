@@ -8,8 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/src/filterfuns.cpp" "CMakeFiles/filterFuns.dir/src/filterfuns.cpp.obj" "gcc" "CMakeFiles/filterFuns.dir/src/filterfuns.cpp.obj.d"
-  "D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/src/main.cpp" "CMakeFiles/filterFuns.dir/src/main.cpp.obj" "gcc" "CMakeFiles/filterFuns.dir/src/main.cpp.obj.d"
+  "E:/scipy-style-medical-image-filter-cpp/src/filterfuns.cpp" "CMakeFiles/filterFuns.dir/src/filterfuns.cpp.obj" "gcc" "CMakeFiles/filterFuns.dir/src/filterfuns.cpp.obj.d"
+  "E:/scipy-style-medical-image-filter-cpp/src/main.cpp" "CMakeFiles/filterFuns.dir/src/main.cpp.obj" "gcc" "CMakeFiles/filterFuns.dir/src/main.cpp.obj.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

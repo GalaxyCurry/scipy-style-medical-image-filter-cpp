@@ -1,1 +1,1 @@
--I"D:/tasks/cuda_learn/scipy-style-medical-image-filter-cpp/include" -I"D:/tasks/cuda_learn/filterlib/dcmtk-install/include"
+-I"E:/scipy-style-medical-image-filter-cpp/include" -isystem "E:/vscode/itk/itk-prefix/include/ITK-5.4" -isystem "E:/vscode/itk/itk-prefix/include/ITK-5.4/itkzlib-ng" -isystem "E:/vscode/itk/itk-prefix/include" -isystem "E:/vscode/itk/itk-prefix/include/ITK-5.4/itkjpeg" -isystem "E:/vscode/itk/itk-prefix/include/ITK-5.4/itkpng"
